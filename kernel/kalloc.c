@@ -9,6 +9,9 @@
 #include "riscv.h"
 #include "defs.h"
 
+#define SUPERPAGESIZE (512 * PGSIZE) // 2 MiB page sizes
+#define NSUPERPAGES 60 //per the lab document
+
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
@@ -23,11 +26,32 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct {
+  struct spinlock lock; //lock specifically for supermem operations
+  void *superpages[NSUPERPAGES]; //array to catalog our superpages
+  int nfree; //number of free superpages
+} supermem;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  superinit(); //allocate space for superpages before regular pages
+  freerange(end, (void*)PHYSTOP - (uint64)NSUPERPAGES * SUPERPAGESIZE); //modification made here to ensure space for 60 superpages
+}
+
+void
+superinit() {
+  initlock(&supermem.lock, "supermem");
+  supermem.nfree = 0; //reset number of free superpages
+
+  uint64 top = PHYSTOP; //start allocation at top of memory space
+  for (int i = 0; i < NSUPERPAGES; i++) { //free up memory for each superpage
+    top -= SUPERPAGESIZE;
+    top = top & ~((uint64)SUPERPAGESIZE - 1);
+    supermem.superpages[supermem.nfree] = (void*)top;
+    supermem.nfree++;
+  }
 }
 
 void
