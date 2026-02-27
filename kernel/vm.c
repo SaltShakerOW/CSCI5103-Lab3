@@ -526,7 +526,7 @@ void vmprint_recurse(pagetable_t pagetable, int depth, uint64 va_recursive)
 
     // reconstruct va using i, px shift, and the previous va
     uint64 va = va_recursive | ((uint64)i << PXSHIFT(2 - depth));
-    
+
     // printing block: we print depth and the current va, pte bits, and pa from the pte we are in
     // note: printing block moved here because we need to print every valid node rather than just the leafs
     printf(" ");

@@ -161,6 +161,7 @@ supercheck(uint64 s)
  106:	89aa                	mv	s3,a0
   pte_t last_pte = 0;
 
+  //start at address s and iterate through 512 pages (2MiB)
   for (uint64 p = s;  p < s + 512 * PGSIZE; p += PGSIZE) {
  108:	00200a37          	lui	s4,0x200
  10c:	9a2a                	add	s4,s4,a0
@@ -274,7 +275,7 @@ superpg_test()
  1ce:	00001717          	auipc	a4,0x1
  1d2:	e2f73923          	sd	a5,-462(a4) # 1000 <testname>
 
-  char *end = sbrk(N);
+  char *end = sbrk(N); //grow process memory by 8MiB
  1d6:	00800537          	lui	a0,0x800
  1da:	394000ef          	jal	ra,56e <sbrk>
   if (end == 0 || end == (char*)0xffffffffffffffff)
@@ -283,13 +284,13 @@ superpg_test()
  1e4:	04e7e463          	bltu	a5,a4,22c <superpg_test+0x7c>
     err("sbrk failed");
 
-  uint64 s = SUPERPGROUNDUP((uint64) end);
+  uint64 s = SUPERPGROUNDUP((uint64) end); //round up to nearest superpage boundary
  1e8:	002007b7          	lui	a5,0x200
  1ec:	17fd                	addi	a5,a5,-1 # 1fffff <base+0x1fefdf>
  1ee:	953e                	add	a0,a0,a5
  1f0:	ffe007b7          	lui	a5,0xffe00
  1f4:	00f574b3          	and	s1,a0,a5
-  supercheck(s);
+  supercheck(s); //checks if superpage is valid inside of this process
  1f8:	8526                	mv	a0,s1
  1fa:	ef9ff0ef          	jal	ra,f2 <supercheck>
   if((pid = fork()) < 0) {
@@ -298,7 +299,7 @@ superpg_test()
     err("fork");
   } else if(pid == 0) {
  206:	cd1d                	beqz	a0,244 <superpg_test+0x94>
-    supercheck(s);
+    supercheck(s); //checks if superpage is valid inside of the forked process
     exit(0);
   } else {
     int status;
@@ -329,7 +330,7 @@ superpg_test()
  238:	00001517          	auipc	a0,0x1
  23c:	9a850513          	addi	a0,a0,-1624 # be0 <malloc+0x204>
  240:	dc1ff0ef          	jal	ra,0 <err>
-    supercheck(s);
+    supercheck(s); //checks if superpage is valid inside of the forked process
  244:	8526                	mv	a0,s1
  246:	eadff0ef          	jal	ra,f2 <supercheck>
     exit(0);

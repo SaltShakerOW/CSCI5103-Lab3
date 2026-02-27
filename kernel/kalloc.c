@@ -9,7 +9,6 @@
 #include "riscv.h"
 #include "defs.h"
 
-#define SUPERPAGESIZE (512 * PGSIZE) // 2 MiB page sizes
 #define NSUPERPAGES 60 //per the lab document
 
 void freerange(void *pa_start, void *pa_end);
@@ -37,7 +36,7 @@ kinit()
 {
   initlock(&kmem.lock, "kmem");
   superinit(); //allocate space for superpages before regular pages
-  freerange(end, (void*)PHYSTOP - (uint64)NSUPERPAGES * SUPERPAGESIZE); //modification made here to ensure space for 60 superpages
+  freerange(end, (void*)PHYSTOP - (uint64)NSUPERPAGES * SUPERPGSIZE); //modification made here to ensure space for 60 superpages
 }
 
 void
@@ -47,10 +46,10 @@ superinit() {
 
   uint64 top = PHYSTOP; //start allocation at top of memory space
   for (int i = 0; i < NSUPERPAGES; i++) { //free up memory for each superpage
-    top -= SUPERPAGESIZE;
-    top = top & ~((uint64)SUPERPAGESIZE - 1);
-    supermem.superpages[supermem.nfree] = (void*)top;
-    supermem.nfree++;
+    top -= SUPERPGSIZE;
+    top = top & ~((uint64)SUPERPGSIZE - 1); //superpage boundary alignment
+    supermem.superpages[supermem.nfree] = (void*)top; //add superpage address to pool
+    supermem.nfree++; //increase number of free superpages
   }
 }
 
@@ -106,4 +105,36 @@ kalloc(void)
     memset((char*)r, 5, PGSIZE); // fill with junk
   }
   return (void*)r;
+}
+
+void *
+superalloc(void) {
+  acquire(&supermem.lock);
+  if (supermem.nfree == 0) { //no free superpages
+    release(&supermem.lock);
+    return 0;
+  }
+  supermem.nfree--;
+  void *pg = supermem.superpages[supermem.nfree];
+  release(&supermem.lock);
+  memset(pg, 5, SUPERPGSIZE);
+  return pg;
+}
+
+void
+superfree(void *pa) {
+  if (((uint64)pa & (SUPERPGSIZE - 1)) != 0) { //check if pa belongs to our address pool (address alignment)
+    panic("superfree: pa not 2MiB aligned");
+  }
+  if ((uint64)pa < PHYSTOP - (uint64)NSUPERPAGES * SUPERPGSIZE || (uint64)pa >= PHYSTOP) {
+    panic("superfree: pa outside of superpage pool range");
+  }
+  memset(pa, 1, SUPERPGSIZE); //set page to junk just like kfree
+  acquire(&supermem.lock);
+  if (supermem.nfree >= NSUPERPAGES) {
+    panic("superfree: superpage pool overflow");
+  }
+  supermem.superpages[supermem.nfree] = pa;
+  supermem.nfree++;
+  release(&supermem.lock);
 }

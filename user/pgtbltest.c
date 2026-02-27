@@ -4,7 +4,7 @@
 #include "kernel/riscv.h"
 #include "user/user.h"
 
-#define N (8 * (1 << 20))
+#define N (8 * (1 << 20)) //8MiB
 
 void print_pgtbl();
 void print_kpgtbl();
@@ -64,6 +64,7 @@ supercheck(uint64 s)
 {
   pte_t last_pte = 0;
 
+  //start at address s and iterate through 512 pages (2MiB)
   for (uint64 p = s;  p < s + 512 * PGSIZE; p += PGSIZE) {
     pte_t pte = (pte_t) pgpte((void *) p);
     if(pte == 0)
@@ -95,16 +96,16 @@ superpg_test()
   printf("superpg_test starting\n");
   testname = "superpg_test";
 
-  char *end = sbrk(N);
+  char *end = sbrk(N); //grow process memory by 8MiB
   if (end == 0 || end == (char*)0xffffffffffffffff)
     err("sbrk failed");
 
-  uint64 s = SUPERPGROUNDUP((uint64) end);
-  supercheck(s);
+  uint64 s = SUPERPGROUNDUP((uint64) end); //round up to nearest superpage boundary
+  supercheck(s); //checks if superpage is valid inside of this process
   if((pid = fork()) < 0) {
     err("fork");
   } else if(pid == 0) {
-    supercheck(s);
+    supercheck(s); //checks if superpage is valid inside of the forked process
     exit(0);
   } else {
     int status;
