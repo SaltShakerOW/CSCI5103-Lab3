@@ -167,7 +167,8 @@ void            uartputc_sync(int);
 int             uartgetc(void);
 
 // vm.c
-void            superinit(void);
+pte_t *         superwalk(pagetable_t, uint64, int);
+int             supermappages(pagetable_t, uint64, uint64, int);
 void            vmprint_recurse(pagetable_t, int, uint64);
 void            kvminit(void);
 void            kvminithart(void);

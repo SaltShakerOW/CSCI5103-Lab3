@@ -120,6 +120,28 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
   return &pagetable[PX(0, va)];
 }
 
+//derivative of walk that only decends one level in the page table
+//key spec for superpages
+pte_t *
+superwalk(pagetable_t pagetable, uint64 va, int alloc)
+{
+  if(va >= MAXVA) {
+    panic("superwalk");
+  }
+
+  pte_t *pte = &pagetable[PX(2, va)]; //only descend one level
+  if(*pte & PTE_V) {
+    pagetable = (pagetable_t)PTE2PA(*pte);
+  } else {
+    if (!alloc || (pagetable = (pde_t *)kalloc()) == 0) {
+      return 0;
+  }
+    memset(pagetable, 0, PGSIZE);
+    *pte = PA2PTE(pagetable) | PTE_V;
+  }
+  return &pagetable[PX(1, va)];
+}
+
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
@@ -185,6 +207,22 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     a += PGSIZE;
     pa += PGSIZE;
   }
+  return 0;
+}
+
+int
+supermappages(pagetable_t pagetable, uint64 va, uint64 pa, int perm) {
+  pte_t *pte;
+  if ((va % SUPERPGSIZE) != 0) {
+    panic("supermappages: va not aligned");
+  }
+  if ((pte = superwalk(pagetable, va, 1)) == 0) { //superwalk failed
+    return -1;
+  }
+  if (*pte & PTE_V) {
+    panic("supermappages: remap");
+  }
+  *pte = PA2PTE(pa) | perm | PTE_V;
   return 0;
 }
 

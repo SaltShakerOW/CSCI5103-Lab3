@@ -123,7 +123,7 @@ superalloc(void) {
 
 void
 superfree(void *pa) {
-  if (((uint64)pa & (SUPERPGSIZE - 1)) != 0) { //check if pa belongs to our address pool (address alignment)
+  if ((uint64)pa % SUPERPGSIZE != 0) { //check if pa belongs to our address pool (address alignment)
     panic("superfree: pa not 2MiB aligned");
   }
   if ((uint64)pa < PHYSTOP - (uint64)NSUPERPAGES * SUPERPGSIZE || (uint64)pa >= PHYSTOP) {
