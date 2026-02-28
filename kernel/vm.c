@@ -300,23 +300,41 @@ uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz, int xperm)
     return oldsz;
 
   oldsz = PGROUNDUP(oldsz);
+
   for (a = oldsz; a < newsz; a += sz)
   {
-    sz = PGSIZE;
-    mem = kalloc();
-    if (mem == 0)
-    {
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
-    }
-    memset(mem, 0, sz);
-    if (mappages(pagetable, a, sz, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
-    {
-      kfree(mem);
-      uvmdealloc(pagetable, a, oldsz);
-      return 0;
+    if (a % SUPERPGSIZE == 0 && newsz - a >= SUPERPGSIZE) { //superpage
+      //this branch is largely a copy of the regular varient, except with superpage specific functions
+      sz = SUPERPGSIZE;
+      mem = superalloc();
+      if (mem == 0) {
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+      memset(mem, 0, sz);
+      if (supermappages(pagetable, a, (uint64)mem, PTE_R | PTE_W | PTE_U | xperm) != 0) {
+        superfree(mem);
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+    } else { //regular page allocation
+      sz = PGSIZE;
+      mem = kalloc();
+      if (mem == 0)
+      {
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
+      memset(mem, 0, sz);
+      if (mappages(pagetable, a, sz, (uint64)mem, PTE_R | PTE_U | xperm) != 0)
+      {
+        kfree(mem);
+        uvmdealloc(pagetable, a, oldsz);
+        return 0;
+      }
     }
   }
+
   return newsz;
 }
 
