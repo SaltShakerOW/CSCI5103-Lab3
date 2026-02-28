@@ -241,6 +241,22 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
   for (a = va; a < va + npages * PGSIZE; a += sz)
   {
     sz = PGSIZE;
+
+    if (a % SUPERPGSIZE == 0) { //check for superpage address alignment
+      //this block is largely a copy of the regular varient, except with superpage specific functions
+      pte_t *spte = superwalk(pagetable, a, 0);
+      if (spte != 0 && (*spte & PTE_V) && (*spte & PTE_R)) { //superpte validity check
+        //printf("superpage branch hit: a=%p va=%p npages=%p spte=%p\n", (void *)a, (void *)va, (void *)npages, (void *)*spte);
+        sz = SUPERPGSIZE;
+        if (do_free) {
+          uint64 spa = PTE2PA(*spte);
+          superfree((void *)spa);
+        }
+        *spte = 0;
+        continue; //skip regular page unmapping
+      }
+    }
+
     if ((pte = walk(pagetable, a, 0)) == 0)
       panic("uvmunmap: walk");
     if ((*pte & PTE_V) == 0)
@@ -406,6 +422,26 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   for (i = 0; i < sz; i += szinc)
   {
     szinc = PGSIZE;
+
+    if (i % SUPERPGSIZE == 0) {
+      pte_t *spte = superwalk(old, i, 0);
+      if ((spte != 0) && (*spte & PTE_V) && (*spte & PTE_R)) {
+        szinc = SUPERPGSIZE;
+        uint64 spa = PTE2PA(*spte);
+        uint64 flags = PTE_FLAGS(*spte);
+        char *mem = superalloc();
+        if (mem == 0) {
+          goto err;
+        }
+        memmove(mem, (char *)spa, SUPERPGSIZE);
+        if (supermappages(new, i, (uint64)mem, flags) != 0) {
+          superfree(mem);
+          goto err;
+        }
+        continue;
+      }
+    }
+
     if ((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if ((*pte & PTE_V) == 0)
